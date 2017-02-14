@@ -1,0 +1,169 @@
+---
+title: 'Practical Machine Learning Project'
+author: "JE Ridley [GitHub](https://github.com/jeridley/PracticalMachineLearning)"
+output:
+  html_document:
+    keep_md: yes
+---
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+###Data
+
+The training data for this project are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+###What you should submit
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+**Peer Review Portion**  
+Your submission for the Peer Review portion should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders  
+:-).
+
+**Course Project Prediction Quiz Portion**  
+Apply your machine learning algorithm to the 20 test cases available in the test data above and submit your predictions in appropriate format to the Course Project Prediction Quiz for automated grading.
+
+
+###Reproducibility
+
+Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis. 
+
+
+###Prepare the datasets
+
+Load libraries.
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(knitr)
+library(gridExtra)
+library(rattle)
+library(randomForest)
+```
+
+Load the training data into a data table.
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+origTrainingData<-read.table("./data/pml-training.csv", header=TRUE, sep=",")
+origTestingData<-read.table("./data/pml-testing.csv",header=TRUE, sep=",")
+```
+
+###Clean the data  
+The data provided variables with missing data, datanot relevant to the question being analyzed. The data was cleaned,extracting relevant variables by using pattern recognition for relevant strings. 52 variables remain.  
+
+
+Clean the columns of the training data
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+trainingClean<-cbind((origTrainingData[,grepl("^accel",names(origTrainingData))]),
+                     (origTrainingData[,grepl("^roll",names(origTrainingData))]),
+                     (origTrainingData[,grepl("^pitch",names(origTrainingData))]),
+                     (origTrainingData[,grepl("^yaw",names(origTrainingData))]),
+                     (origTrainingData[,grepl("^magnet",names(origTrainingData))]),
+                     (origTrainingData[,grepl("^gyro",names(origTrainingData))]), 
+                     (origTrainingData[, grepl("^total",names(origTrainingData))]), 
+                     origTrainingData[,160])
+colnames(trainingClean)[53]<-'Classe'
+```
+
+Clean the columns of the testing data
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+testingClean<-cbind((origTestingData[,grepl("^accel",names(origTestingData))]),
+                    (origTestingData[,grepl("^roll",names(origTestingData))]),
+                    (origTestingData[,grepl("^pitch",names(origTestingData))]),
+                    (origTestingData[,grepl("^yaw",names(origTestingData))]),
+                    (origTestingData[,grepl("^magnet",names(origTestingData))]),
+                    (origTestingData[,grepl("^gyro",names(origTestingData))]), 
+                    (origTestingData[, grepl("^total",names(origTestingData))]), 
+                    origTestingData[,160])
+colnames(testingClean)[53]<-'Classe'
+```
+
+Create 2 partitons of the training data. 60% for training and 40% for testing. 
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+set.seed(1000)
+inTraining = createDataPartition(trainingClean$Classe, p = .60)[[1]]
+trainingData = trainingClean[ inTraining,]
+testingData = trainingClean[-inTraining,]
+```
+###Testing Model
+The outcomes are categorical. The method rpart was used to test a decision tree model.
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+set.seed(1000)
+modFit<-train(Classe~.,method="rpart", data=trainingData)
+print(modFit$finalModel)
+fancyRpartPlot(modFit$finalModel,cex=.5,under.cex=1,shadow.offset=0)
+```
+
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+testingPrediction=predict(modFit,testingData)
+confusionMatrix(testingData$Classe,testingPrediction)
+```
+
+The outcomes are not as definitive as exepected in viewing the plot. In testing this model on the testing data, it is revealed to have a 54.6% accuracy, only slightly better than chance. The variables used in the algorithm include roll_belt, pitch_forearm, yaw_belt,magnet_dumbbell_Z,pitch_belt, and magnet_dumbell_x. The model is the least accurate for outcome D.
+
+###Using the Random Forest Model
+Since the rpart model was inaccurate and the outcome the rpart tree demonstrates more nuances in variable selection, a "random forest" model was tested to see if that method fit the data more appropriately.
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+set.seed(1000)
+modFit2 <- train(Classe ~ ., method="rf",trControl=trainControl(method = "cv", number = 4), data=trainingData)
+```
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+print(modFit2)
+```
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+varImp(modFit2)
+```
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+testingPrediction2=predict(modFit2,testingData)
+confusionMatrix(testingData$Classe,testingPrediction2)
+```
+
+The random forest model has a 99.2% accuracy, much better to the rpart method. The specificity and sensitivity is in the high 90s for all variables. The top five variables of importance included the roll_belt, yaw_belt,magnet_dumbbell_z,magnet_dumbbell_y, and the pitch_forearm. For outcome C, the model is the least accurate. Preprocessing was considered, but at the risk of overfitting the model was not tested due to the accuracy already being over 99%.
+
+Below are a few examples of how the data is more intricate than a discrete rpart model allow for, as it would require many yes/no statements to find all the different variations of each outcome.
+
+
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+p1<-qplot(roll_belt,yaw_belt,colour=Classe,data=trainingData)
+p2<-qplot(roll_belt,pitch_forearm,colour=Classe,data=trainingData)
+grid.arrange(p1,p2,ncol=2)
+dev.off()
+```
+
+###In-Sample & Out-of-Sample Error
+
+The in-sample error is error rate when the model is used to predict the training data it is based off. This error is going to be much less than the out-of-sample error. For the random forest model used as the final algorithm, the in sample error rate is 0; the model is 100% accurate, but could be overfitting the data.
+
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+testingPrediction3=predict(modFit2,testingData)
+confusionMatrix(testingData$Classe,testingPrediction3)
+```
+
+When the model is used on a separate data set the accuracy is still at 99.2%.
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+testingPrediction4=predict(modFit2,testingData)
+confusionMatrix(testingData$Classe,testingPrediction4)
+```
+And when used on the original testing data set, the submitted answer resulted in 100% correct. This may not indicate 100% accuracy as some problems may have had several solutions marked as correct to account for various algorithms. This testing on a new set of data gives more credence that the model accounts for the signal and not just the noise.
+
+```{r eval=TRUE, message=TRUE, tidy=TRUE, warning=FALSE}
+testingAnswers=predict(modFit2, newdata=origTestingData)
+print(testingAnswers)
+```
+
+It is also important to consider that the samples are all taken from one larger sample and that if the data were to be collected again during a different time period or with different participants the out of sample error could be higher and the algorithm may not be as accurate. This is especially true when considering that though there are many observations, the data comes for 6 participants which may not be representative of the population as a whole.
+
+###Conclusion
+Random Forest was a better model for prediction of exercise quality compared to rpart. The nominal categories were dependent the interaction and quality of various variable. The random forest model had over 99% accuracy and fitted well to other subsamples of the data. The algorithm. however,  may not have as high of accuracy on other samples, particularly ones with different subjects.
+
+In the first model D was the most difficult to predict and in the second C was the most difficult to predict. This makes theoretical sense as Class C is lifting the dumbbell only halfway and Class D is lowering the dumbbell only halfway. These movements may be hard to distinguish by the data collected and could be a topic for future research regarding how to detect this difference-if deemed important.
+
+Overall, it is interesting to consider how monitors are affected by the quality of an exercise and are able to predict the error made. This is an important indicator for health and fitness as it is not just the quantity of exercise that can be collected and analyzed but also the quality.
